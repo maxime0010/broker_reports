@@ -18,7 +18,7 @@ chrome_options.add_experimental_option("prefs", prefs)
 chrome_options.add_argument("--headless")  # Run in headless mode (no browser window)
 
 # Set up the WebDriver service (use Service to specify the path to chromedriver)
-service = Service(executable_path="/path/to/chromedriver")
+service = Service(executable_path="/usr/bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
 # Iterate over each ticker and download the historical data
