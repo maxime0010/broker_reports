@@ -16,6 +16,10 @@ chrome_options = Options()
 prefs = {"download.default_directory": os.path.abspath(download_dir)}
 chrome_options.add_experimental_option("prefs", prefs)
 chrome_options.add_argument("--headless")  # Run in headless mode (no browser window)
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--disable-gpu")  # Applicable for Windows
+chrome_options.add_argument("--remote-debugging-port=9222")  # Helps with DevTools issues
 
 # Set up the WebDriver service (use Service to specify the path to chromedriver)
 service = Service(executable_path="/usr/bin/chromedriver")
