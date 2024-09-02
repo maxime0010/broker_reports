@@ -1,3 +1,4 @@
+import traceback
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -59,7 +60,8 @@ for ticker in tickers:
             print(f"Failed to download data for {ticker}")
 
     except Exception as e:
-        print(f"An error occurred for {ticker}: {e}")
+        print(f"An error occurred for {ticker}: {str(e)}")
+        traceback.print_exc()
 
 # Clean up
 driver.quit()
