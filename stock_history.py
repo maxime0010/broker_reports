@@ -1,6 +1,9 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import os
 import time
 
@@ -15,14 +18,13 @@ if not os.path.exists(download_dir):
 chrome_options = Options()
 prefs = {"download.default_directory": os.path.abspath(download_dir)}
 chrome_options.add_experimental_option("prefs", prefs)
-chrome_options.add_argument("--headless")  # Run in headless mode (no browser window)
+chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--disable-gpu")  # Applicable for Windows
-chrome_options.add_argument("--remote-debugging-port=9222")  # Helps with DevTools issues
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--remote-debugging-port=9222")
 
-# Set up the WebDriver service (use Service to specify the path to chromedriver)
-service = Service(executable_path="/usr/bin/chromedriver")
+service = Service(executable_path="/path/to/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
 # Iterate over each ticker and download the historical data
@@ -31,11 +33,11 @@ for ticker in tickers:
         url = f"https://www.nasdaq.com/market-activity/stocks/{ticker.lower()}/historical?page=1&rows_per_page=10&timeline=y10"
         driver.get(url)
 
-        # Allow the page to load
-        time.sleep(5)  # Adjust as necessary based on your connection speed
+        # Allow the page to load fully
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Download Data')]")))
 
         # Click on the "Download historical data" button
-        download_button = driver.find_element("xpath", "//a[contains(text(), 'Download Data')]")
+        download_button = driver.find_element(By.XPATH, "//a[contains(text(), 'Download Data')]")
         download_button.click()
 
         # Wait for the download to complete
