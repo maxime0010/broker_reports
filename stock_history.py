@@ -45,16 +45,48 @@ for ticker in tickers:
         # Scroll down to ensure the download container is visible
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-        # Wait for the "historical-download-container" to be present
-        download_container = WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "historical-download-container"))
-        )
-        print(f"Download container found for {ticker}")
+        try:
+            # Method 1: Locate the "historical-download-container" and find the button
+            download_container = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "historical-download-container"))
+            )
+            download_button = download_container.find_element(By.CSS_SELECTOR, "button.historical-download")
+            download_button.click()
+            print(f"Clicked download button for {ticker}")
+        except Exception as e:
+            print(f"Method 1 failed for {ticker}: {str(e)}")
 
-        # Locate and click the "Download historical data" button within the container
-        download_button = download_container.find_element(By.CSS_SELECTOR, "button.historical-download")
-        download_button.click()
-        print(f"Clicked download button for {ticker}")
+            try:
+                # Method 2: Attempt to click using JavaScript directly
+                download_button = driver.execute_script(
+                    "return document.querySelector('.historical-download-container button.historical-download');"
+                )
+                if download_button:
+                    driver.execute_script("arguments[0].click();", download_button)
+                    print(f"Clicked download button for {ticker} using JavaScript")
+                else:
+                    print(f"JavaScript query returned no element for {ticker}")
+            except Exception as e2:
+                print(f"Method 2 (JavaScript click) failed for {ticker}: {str(e2)}")
+
+                try:
+                    # Method 3: Use full XPath to locate and click the button
+                    download_button = WebDriverWait(driver, 30).until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'historical-download-container')]//button[contains(@class, 'historical-download')]"))
+                    )
+                    download_button.click()
+                    print(f"Clicked download button for {ticker} using full XPath")
+                except Exception as e3:
+                    print(f"Method 3 (XPath) failed for {ticker}: {str(e3)}")
+
+                    try:
+                        # Method 4: Dispatch a click event manually using JavaScript
+                        download_button = driver.find_element(By.CSS_SELECTOR, ".historical-download-container button.historical-download")
+                        driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", download_button)
+                        print(f"Dispatched click event for {ticker}")
+                    except Exception as e4:
+                        print(f"Method 4 (Dispatch event) failed for {ticker}: {str(e4)}")
+                        driver.save_screenshot(f"{ticker}_error.png")
 
         # Wait for the download to complete
         time.sleep(10)  # Increase wait time to ensure file download completes
