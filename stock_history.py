@@ -38,13 +38,15 @@ for ticker in tickers:
         print(f"Page loaded for {ticker}")
 
         # Wait for the page to load completely
-        WebDriverWait(driver, 30).until(
+        WebDriverWait(driver, 60).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
         )
 
         # Scroll down to ensure the download container is visible
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(3)  # Allow time for the element to appear
 
+        # Attempt to find and click the button
         try:
             # Method 1: Locate the "historical-download-container" and find the button
             download_container = WebDriverWait(driver, 30).until(
