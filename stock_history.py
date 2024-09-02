@@ -42,16 +42,17 @@ for ticker in tickers:
             EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
         )
 
-        # Scroll down to ensure the download button is visible
+        # Scroll down to ensure the download container is visible
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-        # Wait for the "Download historical data" button to be clickable
-        download_button = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button.historical-download"))
+        # Wait for the "historical-download-container" to be present
+        download_container = WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "historical-download-container"))
         )
-        print(f"Download button found for {ticker}")
+        print(f"Download container found for {ticker}")
 
-        # Click on the "Download historical data" button
+        # Locate and click the "Download historical data" button within the container
+        download_button = download_container.find_element(By.CSS_SELECTOR, "button.historical-download")
         download_button.click()
         print(f"Clicked download button for {ticker}")
 
