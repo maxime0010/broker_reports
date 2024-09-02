@@ -24,21 +24,27 @@ chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--remote-debugging-port=9222")
 
+# Update the path to chromedriver
 service = Service(executable_path="/usr/bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
 # Iterate over each ticker and download the historical data
 for ticker in tickers:
+    print(f"Processing ticker: {ticker}")
     try:
         url = f"https://www.nasdaq.com/market-activity/stocks/{ticker.lower()}/historical?page=1&rows_per_page=10&timeline=y10"
         driver.get(url)
+        print(f"Page loaded for {ticker}")
 
-        # Allow the page to load fully
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Download Data')]")))
+        # Explicit wait for the "Download Data" button to be present
+        download_button = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Download Data')]"))
+        )
+        print(f"Download button found for {ticker}")
 
         # Click on the "Download historical data" button
-        download_button = driver.find_element(By.XPATH, "//a[contains(text(), 'Download Data')]")
         download_button.click()
+        print(f"Clicked download button for {ticker}")
 
         # Wait for the download to complete
         time.sleep(5)  # Adjust as necessary based on file size
