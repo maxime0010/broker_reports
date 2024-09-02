@@ -37,9 +37,17 @@ for ticker in tickers:
         driver.get(url)
         print(f"Page loaded for {ticker}")
 
-        # Explicit wait for the "Download Data" button to be present
-        download_button = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Download Data')]"))
+        # Wait for the page to load completely
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
+        )
+
+        # Scroll down to ensure the download button is visible
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+        # Wait for the "Download historical data" button to be clickable
+        download_button = WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button.historical-download"))
         )
         print(f"Download button found for {ticker}")
 
@@ -48,7 +56,7 @@ for ticker in tickers:
         print(f"Clicked download button for {ticker}")
 
         # Wait for the download to complete
-        time.sleep(5)  # Adjust as necessary based on file size
+        time.sleep(10)  # Increase wait time to ensure file download completes
 
         # Rename the downloaded file
         downloaded_file = os.path.join(download_dir, "historical.csv")
@@ -61,6 +69,7 @@ for ticker in tickers:
 
     except Exception as e:
         print(f"An error occurred for {ticker}: {str(e)}")
+        driver.save_screenshot(f"{ticker}_error.png")
         traceback.print_exc()
 
 # Clean up
