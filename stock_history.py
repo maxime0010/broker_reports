@@ -67,38 +67,39 @@ for ticker in tickers:
         # List to store scraped data
         ticker_data = []
         
-for row in rows:
-    columns = row.find_elements(By.TAG_NAME, "td")
-    
-    # Extract and clean the price target
-    price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
-    
-    # Check if there's an arrow and extract the final value
-    if '→' in price_target_text:
-        price_target = price_target_text.split('→')[-1].strip()
-    else:
-        price_target = price_target_text
-    
-    # Convert the price target to a float
-    try:
-        price_target = float(price_target)
-    except ValueError:
-        price_target = None  # Set to None if it's not a valid number
+        for row in rows:
+            columns = row.find_elements(By.TAG_NAME, "td")
+            
+            # Extract and clean the price target
+            price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
+            
+            # Check if there's an arrow and extract the final value
+            if '→' in price_target_text:
+                price_target = price_target_text.split('→')[-1].strip()
+            else:
+                price_target = price_target_text
+            
+            # Convert the price target to a float
+            try:
+                price_target = float(price_target)
+            except ValueError:
+                price_target = None  # Set to None if it's not a valid number
 
-    data = {
-        'ticker': ticker,
-        'analyst': columns[0].text.strip(),
-        'firm': columns[1].text.strip(),
-        'rating': columns[3].text.strip(),
-        'action': columns[4].text.strip(),
-        'price_target': price_target,
-        'upside': columns[6].text.replace('%', '').strip(),
-        'date': columns[7].text.strip()
-    }
-    ticker_data.append(data)
+            # Create the data dictionary
+            data = {
+                'ticker': ticker,
+                'analyst': columns[0].text.strip(),
+                'firm': columns[1].text.strip(),
+                'rating': columns[3].text.strip(),
+                'action': columns[4].text.strip(),
+                'price_target': price_target,
+                'upside': columns[6].text.replace('%', '').strip(),
+                'date': columns[7].text.strip()
+            }
+            
+            # Append data to ticker_data list
+            ticker_data.append(data)
 
-
-        
         # Save the ticker's data to the database
         if ticker_data:
             save_to_database(ticker_data)
