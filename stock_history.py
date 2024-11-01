@@ -5,8 +5,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import mysql.connector
-import os
 from datetime import datetime
+import os
 
 # MySQL configuration
 db_config = {
@@ -16,9 +16,6 @@ db_config = {
     'database': 'defaultdb',
     'port': 25060
 }
-
-# List of tickers
-tickers = ['MSFT']  # Add more tickers as needed
 
 # Set up Chrome options
 chrome_options = Options()
@@ -52,8 +49,49 @@ def save_to_database(data):
         cursor.close()
         conn.close()
 
-# Iterate over each ticker and scrape data
-for ticker in tickers:
+def get_oldest_ticker():
+    """Get the ticker with the oldest update date from the tracking table."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            SELECT ticker FROM scraping_progress
+            ORDER BY last_updated ASC
+            LIMIT 1
+        """
+        cursor.execute(query)
+        result = cursor.fetchone()
+        return result['ticker'] if result else None
+    except mysql.connector.Error as err:
+        print(f"Database error: {err}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+def update_last_updated_date(ticker):
+    """Update the last_updated date for a given ticker in the tracking table."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        query = """
+            INSERT INTO scraping_progress (ticker, last_updated)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE last_updated = %s
+        """
+        today = datetime.today().strftime('%Y-%m-%d')
+        cursor.execute(query, (ticker, today, today))
+        conn.commit()
+    except mysql.connector.Error as err:
+        print(f"Database error: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+
+# Find the ticker to update
+ticker = get_oldest_ticker()
+
+if ticker:
     url = f"https://stockanalysis.com/stocks/{ticker.lower()}/ratings/"
     driver.get(url)
 
@@ -111,6 +149,7 @@ for ticker in tickers:
         # Save the ticker's data to the database
         if ticker_data:
             save_to_database(ticker_data)
+            update_last_updated_date(ticker)  # Update the last_updated date
 
     except Exception as e:
         print(f"Error occurred for ticker {ticker}: {str(e)}")
