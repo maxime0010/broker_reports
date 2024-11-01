@@ -72,6 +72,7 @@ for row in rows:
     
     # Extract and clean the price target
     price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
+    
     # Check if there's an arrow and extract the final value
     if '→' in price_target_text:
         price_target = price_target_text.split('→')[-1].strip()
@@ -95,6 +96,7 @@ for row in rows:
         'date': columns[7].text.strip()
     }
     ticker_data.append(data)
+
 
         
         # Save the ticker's data to the database
