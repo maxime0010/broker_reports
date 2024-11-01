@@ -6,6 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import mysql.connector
 import os
+from datetime import datetime
 
 # MySQL configuration
 db_config = {
@@ -85,6 +86,13 @@ for ticker in tickers:
             except ValueError:
                 price_target = None  # Set to None if it's not a valid number
 
+            # Parse the date into YYYY-MM-DD format
+            date_text = columns[7].text.strip()
+            try:
+                date = datetime.strptime(date_text, "%b %d, %Y").strftime("%Y-%m-%d")
+            except ValueError:
+                date = None  # Set to None if it's not a valid date
+
             # Create the data dictionary
             data = {
                 'ticker': ticker,
@@ -94,7 +102,7 @@ for ticker in tickers:
                 'action': columns[4].text.strip(),
                 'price_target': price_target,
                 'upside': columns[6].text.replace('%', '').strip(),
-                'date': columns[7].text.strip()
+                'date': date
             }
             
             # Append data to ticker_data list
