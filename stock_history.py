@@ -7,6 +7,19 @@ from selenium.webdriver.support import expected_conditions as EC
 import mysql.connector
 from datetime import datetime
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename='/root/broker_reports/error.log',
+    level=logging.DEBUG,  # Use DEBUG for detailed logs
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Log environment variables
+logging.debug("Environment Variables:")
+logging.debug(f"MYSQL_MDP: {os.getenv('MYSQL_MDP')}")
+logging.debug(f"MYSQL_HOST: {os.getenv('MYSQL_HOST')}")
 
 # MySQL configuration
 db_config = {
@@ -29,6 +42,8 @@ driver = webdriver.Chrome(service=service, options=chrome_options)
 
 def save_to_database(data):
     """Save the scraped data to MySQL."""
+    conn = None
+    cursor = None
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -42,15 +57,19 @@ def save_to_database(data):
                 entry['action'], entry['price_target'], entry['upside'], entry['date']
             ))
         conn.commit()
-        print("Data saved to database")
+        logging.debug("Data saved to database")
     except mysql.connector.Error as err:
-        print(f"Database error: {err}")
+        logging.error(f"Database error: {err}")
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def get_oldest_ticker():
     """Get the ticker with the oldest update date from the tracking table."""
+    conn = None
+    cursor = None
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
@@ -61,16 +80,21 @@ def get_oldest_ticker():
         """
         cursor.execute(query)
         result = cursor.fetchone()
+        logging.debug(f"Oldest ticker fetched: {result}")
         return result['ticker'] if result else None
     except mysql.connector.Error as err:
-        print(f"Database error: {err}")
+        logging.error(f"Database error: {err}")
         return None
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def update_last_updated_date(ticker):
     """Update the last_updated date for a given ticker in the tracking table."""
+    conn = None
+    cursor = None
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -82,11 +106,14 @@ def update_last_updated_date(ticker):
         today = datetime.today().strftime('%Y-%m-%d')
         cursor.execute(query, (ticker, today, today))
         conn.commit()
+        logging.debug(f"Updated last_updated date for ticker: {ticker}")
     except mysql.connector.Error as err:
-        print(f"Database error: {err}")
+        logging.error(f"Database error: {err}")
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 # Find the ticker to update
 ticker = get_oldest_ticker()
@@ -152,7 +179,8 @@ if ticker:
             update_last_updated_date(ticker)  # Update the last_updated date
 
     except Exception as e:
-        print(f"Error occurred for ticker {ticker}: {str(e)}")
+        logging.error(f"Error occurred for ticker {ticker}: {str(e)}")
 
 # Clean up
 driver.quit()
+logging.debug("Script completed.")
