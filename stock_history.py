@@ -38,6 +38,61 @@ chrome_options.add_argument("--disable-dev-shm-usage")
 service = Service(executable_path="/usr/bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
+def get_oldest_ticker():
+    """Fetch the ticker with the oldest last_updated date."""
+    logging.debug("Fetching the oldest ticker to update...")
+    conn = None
+    cursor = None
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            SELECT ticker FROM scraping_progress
+            ORDER BY last_updated ASC
+            LIMIT 1
+        """
+        cursor.execute(query)
+        result = cursor.fetchone()
+        if result:
+            logging.debug(f"Oldest ticker fetched: {result['ticker']}")
+            return result['ticker']
+        else:
+            logging.debug("No ticker found in scraping_progress table.")
+            return None
+    except mysql.connector.Error as err:
+        logging.error(f"Database error while fetching ticker: {err}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def update_last_updated_date(ticker):
+    """Update the last_updated date for a given ticker in the tracking table."""
+    logging.debug(f"Updating last_updated date for ticker: {ticker}")
+    conn = None
+    cursor = None
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        query = """
+            UPDATE scraping_progress
+            SET last_updated = %s
+            WHERE ticker = %s
+        """
+        today = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        cursor.execute(query, (today, ticker))
+        conn.commit()
+        logging.debug(f"Updated last_updated date for ticker: {ticker}")
+    except mysql.connector.Error as err:
+        logging.error(f"Database error while updating last_updated date: {err}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 def save_to_database(data):
     """Save the scraped data to MySQL, avoiding duplicates."""
     logging.debug("Saving data to the database...")
@@ -73,7 +128,7 @@ def save_to_database(data):
             conn.close()
 
 # Main execution
-ticker = "AMCR"  # Replace with dynamic ticker fetching logic
+ticker = get_oldest_ticker()
 if ticker:
     url = f"https://stockanalysis.com/stocks/{ticker.lower()}/ratings/"
     logging.debug(f"Navigating to URL: {url}")
@@ -132,9 +187,13 @@ if ticker:
 
         if ticker_data:
             save_to_database(ticker_data)
+            update_last_updated_date(ticker)
 
     except Exception as e:
         logging.error(f"Error during scraping for ticker {ticker}: {e}")
+
+else:
+    logging.debug("No ticker found to update.")
 
 driver.quit()
 logging.debug("Script execution completed.")
