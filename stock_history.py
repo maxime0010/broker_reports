@@ -9,13 +9,13 @@ from datetime import datetime
 import os
 import logging
 
-# Configure logging to both a file and the terminal
+# Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,  # Set the lowest logging level
-    format='%(asctime)s - %(levelname)s - %(message)s',  # Format for log messages
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/root/broker_reports/debug.log'),  # Log to file
-        logging.StreamHandler()  # Log to terminal (stdout)
+        logging.FileHandler('/root/broker_reports/debug.log'),
+        logging.StreamHandler()
     ]
 )
 
@@ -30,26 +30,13 @@ db_config = {
     'port': 25060
 }
 
-# Check environment variables
-if not db_config['password'] or not db_config['host']:
-    logging.error("MYSQL_MDP or MYSQL_HOST environment variables are not set.")
-else:
-    logging.debug(f"MySQL host: {db_config['host']}, User: {db_config['user']}")
-
 # Set up Chrome options
-logging.debug("Configuring Selenium WebDriver...")
 chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 service = Service(executable_path="/usr/bin/chromedriver")
-
-try:
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    logging.debug("Selenium WebDriver successfully initialized.")
-except Exception as e:
-    logging.error(f"Failed to initialize Selenium WebDriver: {e}")
-    raise
+driver = webdriver.Chrome(service=service, options=chrome_options)
 
 def save_to_database(data):
     """Save the scraped data to MySQL, avoiding duplicates."""
@@ -85,61 +72,9 @@ def save_to_database(data):
         if conn:
             conn.close()
 
-def get_oldest_ticker():
-    """Get the ticker with the oldest update date from the tracking table."""
-    logging.debug("Fetching the oldest ticker to update...")
-    conn = None
-    cursor = None
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        query = """
-            SELECT ticker FROM scraping_progress
-            ORDER BY last_updated ASC
-            LIMIT 1
-        """
-        cursor.execute(query)
-        result = cursor.fetchone()
-        logging.debug(f"Fetched ticker: {result}")
-        return result['ticker'] if result else None
-    except mysql.connector.Error as err:
-        logging.error(f"Database error while fetching ticker: {err}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def update_last_updated_date(ticker):
-    """Update the last_updated date for a given ticker in the tracking table."""
-    logging.debug(f"Updating last_updated date for ticker: {ticker}")
-    conn = None
-    cursor = None
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        query = """
-            INSERT INTO scraping_progress (ticker, last_updated)
-            VALUES (%s, %s)
-            ON DUPLICATE KEY UPDATE last_updated = %s
-        """
-        today = datetime.today().strftime('%Y-%m-%d')
-        cursor.execute(query, (ticker, today, today))
-        conn.commit()
-        logging.debug(f"Updated last_updated date for ticker: {ticker}")
-    except mysql.connector.Error as err:
-        logging.error(f"Database error while updating last_updated date: {err}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
 # Main execution
-ticker = get_oldest_ticker()
+ticker = "AMCR"  # Replace with dynamic ticker fetching logic
 if ticker:
-    logging.debug(f"Ticker to update: {ticker}")
     url = f"https://stockanalysis.com/stocks/{ticker.lower()}/ratings/"
     logging.debug(f"Navigating to URL: {url}")
     driver.get(url)
@@ -166,18 +101,27 @@ if ticker:
                     price_target = price_target_text
                 price_target = float(price_target) if price_target.lower() != 'n/a' else None
 
+                # Extract and handle upside
+                upside_text = columns[6].text.replace('%', '').strip()
+                upside = float(upside_text) if upside_text.lower() != 'n/a' else None
+
                 # Parse the date
                 date_text = columns[7].text.strip()
                 date = datetime.strptime(date_text, "%b %d, %Y").strftime("%Y-%m-%d")
+
+                # Clean rating
+                rating = columns[3].text.strip()
+                if '→' in rating:
+                    rating = rating.split('→')[-1].strip()
 
                 data = {
                     'ticker': ticker,
                     'analyst': columns[0].text.strip(),
                     'firm': columns[1].text.strip(),
-                    'rating': columns[3].text.strip(),
+                    'rating': rating,
                     'action': columns[4].text.strip(),
                     'price_target': price_target,
-                    'upside': columns[6].text.replace('%', '').strip(),
+                    'upside': upside,
                     'date': date
                 }
                 ticker_data.append(data)
@@ -188,13 +132,9 @@ if ticker:
 
         if ticker_data:
             save_to_database(ticker_data)
-            update_last_updated_date(ticker)
 
     except Exception as e:
         logging.error(f"Error during scraping for ticker {ticker}: {e}")
-
-else:
-    logging.debug("No ticker found to update.")
 
 driver.quit()
 logging.debug("Script execution completed.")
