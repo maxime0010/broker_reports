@@ -11,10 +11,12 @@ import logging
 
 # Configure logging
 logging.basicConfig(
-    filename='/root/broker_reports/error.log',
+    filename='/root/broker_reports/debug.log',  # Use a different log file for detailed debug logs
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+logging.debug("Starting script execution...")
 
 # MySQL configuration
 db_config = {
@@ -25,22 +27,37 @@ db_config = {
     'port': 25060
 }
 
+# Check environment variables
+if not db_config['password'] or not db_config['host']:
+    logging.error("MYSQL_MDP or MYSQL_HOST environment variables are not set.")
+else:
+    logging.debug(f"MySQL host: {db_config['host']}, User: {db_config['user']}")
+
 # Set up Chrome options
+logging.debug("Configuring Selenium WebDriver...")
 chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 service = Service(executable_path="/usr/bin/chromedriver")
-driver = webdriver.Chrome(service=service, options=chrome_options)
+
+try:
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    logging.debug("Selenium WebDriver successfully initialized.")
+except Exception as e:
+    logging.error(f"Failed to initialize Selenium WebDriver: {e}")
+    raise
 
 def save_to_database(data):
     """Save the scraped data to MySQL, avoiding duplicates."""
+    logging.debug("Saving data to the database...")
     conn = None
     cursor = None
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
         for entry in data:
+            logging.debug(f"Saving entry: {entry}")
             query = """
                 INSERT INTO analyst_ratings (ticker, analyst, firm, rating, action, price_target, upside, date)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -56,7 +73,7 @@ def save_to_database(data):
                 entry['action'], entry['price_target'], entry['upside'], entry['date']
             ))
         conn.commit()
-        logging.debug("Data saved to database without duplicates")
+        logging.debug("Data committed to the database.")
     except mysql.connector.Error as err:
         logging.error(f"Database error: {err}")
     finally:
@@ -67,6 +84,7 @@ def save_to_database(data):
 
 def get_oldest_ticker():
     """Get the ticker with the oldest update date from the tracking table."""
+    logging.debug("Fetching the oldest ticker to update...")
     conn = None
     cursor = None
     try:
@@ -79,10 +97,10 @@ def get_oldest_ticker():
         """
         cursor.execute(query)
         result = cursor.fetchone()
-        logging.debug(f"Oldest ticker fetched: {result}")
+        logging.debug(f"Fetched ticker: {result}")
         return result['ticker'] if result else None
     except mysql.connector.Error as err:
-        logging.error(f"Database error: {err}")
+        logging.error(f"Database error while fetching ticker: {err}")
         return None
     finally:
         if cursor:
@@ -92,6 +110,7 @@ def get_oldest_ticker():
 
 def update_last_updated_date(ticker):
     """Update the last_updated date for a given ticker in the tracking table."""
+    logging.debug(f"Updating last_updated date for ticker: {ticker}")
     conn = None
     cursor = None
     try:
@@ -107,30 +126,34 @@ def update_last_updated_date(ticker):
         conn.commit()
         logging.debug(f"Updated last_updated date for ticker: {ticker}")
     except mysql.connector.Error as err:
-        logging.error(f"Database error: {err}")
+        logging.error(f"Database error while updating last_updated date: {err}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
 
-# Find the ticker to update
+# Main execution
 ticker = get_oldest_ticker()
-
 if ticker:
+    logging.debug(f"Ticker to update: {ticker}")
     url = f"https://stockanalysis.com/stocks/{ticker.lower()}/ratings/"
+    logging.debug(f"Navigating to URL: {url}")
     driver.get(url)
 
     try:
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".rating-table tbody"))
         )
-        
+        logging.debug("Ratings table located on the page.")
+
         rows = driver.find_elements(By.CSS_SELECTOR, ".rating-table tbody tr")
-        ticker_data = []  # Initialize ticker_data here
-        
+        logging.debug(f"Found {len(rows)} rows in the table.")
+        ticker_data = []
+
         for row in rows:
             columns = row.find_elements(By.TAG_NAME, "td")
+            logging.debug(f"Processing row: {row.text}")
             price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
             price_target = float(price_target_text.split('→')[-1].strip()) if '→' in price_target_text else float(price_target_text)
             date = datetime.strptime(columns[7].text.strip(), "%b %d, %Y").strftime("%Y-%m-%d")
@@ -147,24 +170,17 @@ if ticker:
             }
             ticker_data.append(data)
 
-        # Filter duplicates before saving
-        unique_entries = set()
-        ticker_data_filtered = []
-        for entry in ticker_data:
-            record_identifier = (
-                entry['ticker'], entry['analyst'], entry['firm'], entry['rating'], 
-                entry['action'], entry['price_target'], entry['upside'], entry['date']
-            )
-            if record_identifier not in unique_entries:
-                unique_entries.add(record_identifier)
-                ticker_data_filtered.append(entry)
+        logging.debug(f"Collected data: {ticker_data}")
 
-        if ticker_data_filtered:
-            save_to_database(ticker_data_filtered)
+        if ticker_data:
+            save_to_database(ticker_data)
             update_last_updated_date(ticker)
 
     except Exception as e:
-        logging.error(f"Error occurred for ticker {ticker}: {str(e)}")
+        logging.error(f"Error during scraping for ticker {ticker}: {e}")
+
+else:
+    logging.debug("No ticker found to update.")
 
 driver.quit()
-logging.debug("Script completed.")
+logging.debug("Script execution completed.")
