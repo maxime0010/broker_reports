@@ -12,14 +12,9 @@ import logging
 # Configure logging
 logging.basicConfig(
     filename='/root/broker_reports/error.log',
-    level=logging.DEBUG,  # Use DEBUG for detailed logs
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-
-# Log environment variables
-logging.debug("Environment Variables:")
-logging.debug(f"MYSQL_MDP: {os.getenv('MYSQL_MDP')}")
-logging.debug(f"MYSQL_HOST: {os.getenv('MYSQL_HOST')}")
 
 # MySQL configuration
 db_config = {
@@ -35,8 +30,6 @@ chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
-
-# Update the path to chromedriver if needed
 service = Service(executable_path="/usr/bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
@@ -47,8 +40,6 @@ def save_to_database(data):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-
-        # Loop through the data and insert only if it doesn't already exist
         for entry in data:
             query = """
                 INSERT INTO analyst_ratings (ticker, analyst, firm, rating, action, price_target, upside, date)
@@ -73,26 +64,6 @@ def save_to_database(data):
             cursor.close()
         if conn:
             conn.close()
-
-# Filter duplicates in `ticker_data`
-ticker_data_filtered = []
-unique_entries = set()
-
-for entry in ticker_data:
-    # Create a tuple as a unique identifier for each record
-    record_identifier = (
-        entry['ticker'], entry['analyst'], entry['firm'], entry['rating'], 
-        entry['action'], entry['price_target'], entry['upside'], entry['date']
-    )
-    if record_identifier not in unique_entries:
-        unique_entries.add(record_identifier)
-        ticker_data_filtered.append(entry)
-
-# Save filtered data
-if ticker_data_filtered:
-    save_to_database(ticker_data_filtered)
-    update_last_updated_date(ticker)
-
 
 def get_oldest_ticker():
     """Get the ticker with the oldest update date from the tracking table."""
@@ -150,43 +121,20 @@ if ticker:
     url = f"https://stockanalysis.com/stocks/{ticker.lower()}/ratings/"
     driver.get(url)
 
-    # Wait until the ratings table is present
     try:
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".rating-table tbody"))
         )
         
         rows = driver.find_elements(By.CSS_SELECTOR, ".rating-table tbody tr")
-        
-        # List to store scraped data
-        ticker_data = []
+        ticker_data = []  # Initialize ticker_data here
         
         for row in rows:
             columns = row.find_elements(By.TAG_NAME, "td")
-            
-            # Extract and clean the price target
             price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
+            price_target = float(price_target_text.split('→')[-1].strip()) if '→' in price_target_text else float(price_target_text)
+            date = datetime.strptime(columns[7].text.strip(), "%b %d, %Y").strftime("%Y-%m-%d")
             
-            # Check if there's an arrow and extract the final value
-            if '→' in price_target_text:
-                price_target = price_target_text.split('→')[-1].strip()
-            else:
-                price_target = price_target_text
-            
-            # Convert the price target to a float
-            try:
-                price_target = float(price_target)
-            except ValueError:
-                price_target = None  # Set to None if it's not a valid number
-
-            # Parse the date into YYYY-MM-DD format
-            date_text = columns[7].text.strip()
-            try:
-                date = datetime.strptime(date_text, "%b %d, %Y").strftime("%Y-%m-%d")
-            except ValueError:
-                date = None  # Set to None if it's not a valid date
-
-            # Create the data dictionary
             data = {
                 'ticker': ticker,
                 'analyst': columns[0].text.strip(),
@@ -197,18 +145,26 @@ if ticker:
                 'upside': columns[6].text.replace('%', '').strip(),
                 'date': date
             }
-            
-            # Append data to ticker_data list
             ticker_data.append(data)
 
-        # Save the ticker's data to the database
-        if ticker_data:
-            save_to_database(ticker_data)
-            update_last_updated_date(ticker)  # Update the last_updated date
+        # Filter duplicates before saving
+        unique_entries = set()
+        ticker_data_filtered = []
+        for entry in ticker_data:
+            record_identifier = (
+                entry['ticker'], entry['analyst'], entry['firm'], entry['rating'], 
+                entry['action'], entry['price_target'], entry['upside'], entry['date']
+            )
+            if record_identifier not in unique_entries:
+                unique_entries.add(record_identifier)
+                ticker_data_filtered.append(entry)
+
+        if ticker_data_filtered:
+            save_to_database(ticker_data_filtered)
+            update_last_updated_date(ticker)
 
     except Exception as e:
         logging.error(f"Error occurred for ticker {ticker}: {str(e)}")
 
-# Clean up
 driver.quit()
 logging.debug("Script completed.")
