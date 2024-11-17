@@ -9,11 +9,14 @@ from datetime import datetime
 import os
 import logging
 
-# Configure logging
+# Configure logging to both a file and the terminal
 logging.basicConfig(
-    filename='/root/broker_reports/debug.log',  # Use a different log file for detailed debug logs
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,  # Set the lowest logging level
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Format for log messages
+    handlers=[
+        logging.FileHandler('/root/broker_reports/debug.log'),  # Log to file
+        logging.StreamHandler()  # Log to terminal (stdout)
+    ]
 )
 
 logging.debug("Starting script execution...")
@@ -152,25 +155,36 @@ if ticker:
         ticker_data = []
 
         for row in rows:
-            columns = row.find_elements(By.TAG_NAME, "td")
-            logging.debug(f"Processing row: {row.text}")
-            price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
-            price_target = float(price_target_text.split('→')[-1].strip()) if '→' in price_target_text else float(price_target_text)
-            date = datetime.strptime(columns[7].text.strip(), "%b %d, %Y").strftime("%Y-%m-%d")
-            
-            data = {
-                'ticker': ticker,
-                'analyst': columns[0].text.strip(),
-                'firm': columns[1].text.strip(),
-                'rating': columns[3].text.strip(),
-                'action': columns[4].text.strip(),
-                'price_target': price_target,
-                'upside': columns[6].text.replace('%', '').strip(),
-                'date': date
-            }
-            ticker_data.append(data)
+            try:
+                columns = row.find_elements(By.TAG_NAME, "td")
 
-        logging.debug(f"Collected data: {ticker_data}")
+                # Extract and handle price target
+                price_target_text = columns[5].text.replace('$', '').replace(',', '').strip()
+                if '→' in price_target_text:
+                    price_target = price_target_text.split('→')[-1].strip()
+                else:
+                    price_target = price_target_text
+                price_target = float(price_target) if price_target.lower() != 'n/a' else None
+
+                # Parse the date
+                date_text = columns[7].text.strip()
+                date = datetime.strptime(date_text, "%b %d, %Y").strftime("%Y-%m-%d")
+
+                data = {
+                    'ticker': ticker,
+                    'analyst': columns[0].text.strip(),
+                    'firm': columns[1].text.strip(),
+                    'rating': columns[3].text.strip(),
+                    'action': columns[4].text.strip(),
+                    'price_target': price_target,
+                    'upside': columns[6].text.replace('%', '').strip(),
+                    'date': date
+                }
+                ticker_data.append(data)
+                logging.debug(f"Processed data: {data}")
+
+            except Exception as row_error:
+                logging.error(f"Error processing row: {row.text}, Error: {row_error}")
 
         if ticker_data:
             save_to_database(ticker_data)
